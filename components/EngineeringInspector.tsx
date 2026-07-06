@@ -1,9 +1,11 @@
 import { CabinetEngineering, ScreenEngineering } from '../lib/engineering-model';
 
+type EditableEngineeringKeys = 'receiverCardModel' | 'processorModel' | 'defaultDataPort' | 'defaultPowerLine' | 'defaultConfigFile';
+
 type EngineeringInspectorProps = {
   engineering: ScreenEngineering;
   selectedCabinet?: CabinetEngineering;
-  onScreenChange?: (patch: Partial<Pick<ScreenEngineering, 'receiverCardModel' | 'processorModel' | 'defaultConfigFile'>>) => void;
+  onScreenChange?: (patch: Partial<Pick<ScreenEngineering, EditableEngineeringKeys>>) => void;
   labels: {
     screenObject: string;
     selectedCabinet: string;
@@ -36,6 +38,14 @@ export function EngineeringInspector({ engineering, selectedCabinet, onScreenCha
             <input value={engineering.processorModel} onChange={(event) => onScreenChange?.({ processorModel: event.target.value })} />
           </label>
           <label className="field">
+            <span>{labels.dataPort}</span>
+            <input value={engineering.defaultDataPort} onChange={(event) => onScreenChange?.({ defaultDataPort: event.target.value })} />
+          </label>
+          <label className="field">
+            <span>{labels.powerLine}</span>
+            <input value={engineering.defaultPowerLine} onChange={(event) => onScreenChange?.({ defaultPowerLine: event.target.value })} />
+          </label>
+          <label className="field">
             <span>{labels.configFile}</span>
             <input value={engineering.defaultConfigFile} onChange={(event) => onScreenChange?.({ defaultConfigFile: event.target.value })} />
           </label>
@@ -44,6 +54,8 @@ export function EngineeringInspector({ engineering, selectedCabinet, onScreenCha
         <>
           <div className="prop"><span>{labels.receiverCard}</span><strong>{engineering.receiverCardModel}</strong></div>
           <div className="prop"><span>{labels.processor}</span><strong>{engineering.processorModel}</strong></div>
+          <div className="prop"><span>{labels.dataPort}</span><strong>{engineering.defaultDataPort}</strong></div>
+          <div className="prop"><span>{labels.powerLine}</span><strong>{engineering.defaultPowerLine}</strong></div>
           <div className="prop"><span>{labels.configFile}</span><strong>{engineering.defaultConfigFile}</strong></div>
         </>
       )}

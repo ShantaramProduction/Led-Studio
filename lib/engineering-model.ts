@@ -12,6 +12,7 @@ export type CabinetEngineering = {
   powerLine: string;
   configFile: string;
   serialNumber: string;
+  comment: string;
 };
 
 export type RoutingPath = {
@@ -27,6 +28,8 @@ export type ScreenEngineering = {
   objectMode: ObjectMode;
   receiverCardModel: string;
   processorModel: string;
+  defaultDataPort: string;
+  defaultPowerLine: string;
   defaultConfigFile: string;
   cabinets: CabinetEngineering[];
   routing: RoutingPath[];
@@ -39,6 +42,8 @@ export type ScreenGeometryInput = {
   numberingMode: 'rows' | 'snake';
   receiverCardModel?: string;
   processorModel?: string;
+  defaultDataPort?: string;
+  defaultPowerLine?: string;
   defaultConfigFile?: string;
 };
 
@@ -49,6 +54,8 @@ export const buildCabinetEngineering = ({
   numberingMode,
   receiverCardModel = 'NovaStar A10s Pro',
   processorModel = 'NovaStar VX1000',
+  defaultDataPort = 'Port',
+  defaultPowerLine = 'Line',
   defaultConfigFile = 'not assigned',
 }: ScreenGeometryInput): ScreenEngineering => {
   const cabinets: CabinetEngineering[] = Array.from({ length: columns * rows }, (_, index) => {
@@ -65,10 +72,11 @@ export const buildCabinetEngineering = ({
       column: column + 1,
       label,
       receiverCard: receiverCardModel,
-      dataPort: `Port ${Math.floor(index / 32) + 1}`,
-      powerLine: `Line ${Math.floor(index / 16) + 1}`,
+      dataPort: `${defaultDataPort} ${Math.floor(index / 32) + 1}`,
+      powerLine: `${defaultPowerLine} ${Math.floor(index / 16) + 1}`,
       configFile: defaultConfigFile,
       serialNumber: '',
+      comment: '',
     };
   });
 
@@ -77,6 +85,8 @@ export const buildCabinetEngineering = ({
     objectMode: 'screen',
     receiverCardModel,
     processorModel,
+    defaultDataPort,
+    defaultPowerLine,
     defaultConfigFile,
     cabinets,
     routing: [

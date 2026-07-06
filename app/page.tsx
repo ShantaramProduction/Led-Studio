@@ -66,7 +66,11 @@ export default function Home() {
 
           <div className="stage-label">Рабочая область / Предпросмотр экрана</div>
           <div className="stage-inner">
-            <div className="screen-card" aria-label="Предпросмотр LED-экрана">
+            <div
+              className="screen-card"
+              aria-label="Предпросмотр LED-экрана"
+              style={{ aspectRatio: `${screen.calculated.widthMm} / ${screen.calculated.heightMm}` }}
+            >
               <div
                 className="cabinet-grid"
                 style={{

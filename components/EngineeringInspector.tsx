@@ -3,6 +3,7 @@ import { CabinetEngineering, ScreenEngineering } from '../lib/engineering-model'
 type EngineeringInspectorProps = {
   engineering: ScreenEngineering;
   selectedCabinet?: CabinetEngineering;
+  onScreenChange?: (patch: Partial<Pick<ScreenEngineering, 'receiverCardModel' | 'processorModel' | 'defaultConfigFile'>>) => void;
   labels: {
     screenObject: string;
     selectedCabinet: string;
@@ -16,15 +17,36 @@ type EngineeringInspectorProps = {
   };
 };
 
-export function EngineeringInspector({ engineering, selectedCabinet, labels }: EngineeringInspectorProps) {
+export function EngineeringInspector({ engineering, selectedCabinet, onScreenChange, labels }: EngineeringInspectorProps) {
   const cabinet = selectedCabinet ?? engineering.cabinets[0];
+  const editable = Boolean(onScreenChange);
 
   return (
     <div className="engineering-panel">
       <div className="section-title">{labels.screenObject}</div>
-      <div className="prop"><span>{labels.receiverCard}</span><strong>{engineering.receiverCardModel}</strong></div>
-      <div className="prop"><span>{labels.processor}</span><strong>{engineering.processorModel}</strong></div>
-      <div className="prop"><span>{labels.configFile}</span><strong>{engineering.defaultConfigFile}</strong></div>
+
+      {editable ? (
+        <>
+          <label className="field">
+            <span>{labels.receiverCard}</span>
+            <input value={engineering.receiverCardModel} onChange={(event) => onScreenChange?.({ receiverCardModel: event.target.value })} />
+          </label>
+          <label className="field">
+            <span>{labels.processor}</span>
+            <input value={engineering.processorModel} onChange={(event) => onScreenChange?.({ processorModel: event.target.value })} />
+          </label>
+          <label className="field">
+            <span>{labels.configFile}</span>
+            <input value={engineering.defaultConfigFile} onChange={(event) => onScreenChange?.({ defaultConfigFile: event.target.value })} />
+          </label>
+        </>
+      ) : (
+        <>
+          <div className="prop"><span>{labels.receiverCard}</span><strong>{engineering.receiverCardModel}</strong></div>
+          <div className="prop"><span>{labels.processor}</span><strong>{engineering.processorModel}</strong></div>
+          <div className="prop"><span>{labels.configFile}</span><strong>{engineering.defaultConfigFile}</strong></div>
+        </>
+      )}
 
       <div className="section-title">{labels.selectedCabinet}</div>
       <div className="prop"><span>ID</span><strong>#{cabinet?.label ?? 1}</strong></div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { PointerEvent, WheelEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Cabinet, cabinetPresets, calculateScreen } from '../lib/screen-engine';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 
@@ -12,6 +12,7 @@ const toNumber = (value: string, fallback: number) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+type Language = 'ru' | 'en';
 type NumberingMode = 'rows' | 'snake';
 type InspectorTab = 'screen' | 'cabinet' | 'calc';
 type SaveStatus = 'saved' | 'saving' | 'local' | 'error';
@@ -32,12 +33,20 @@ type ProjectState = {
   screens: ScreenDraft[];
   activeScreenId: string;
   numberingMode: NumberingMode;
+  language?: Language;
 };
 
+type ContextMenu = {
+  x: number;
+  y: number;
+  target: 'stage' | 'screen';
+  screenId?: string;
+} | null;
+
 const initialScreens: ScreenDraft[] = [
-  { id: 'main', name: 'Main Stage Screen', cabinetId: cabinetPresets[0].id, columns: '12', rows: '4', x: 120, y: 120 },
-  { id: 'left-imag', name: 'Left IMAG', cabinetId: cabinetPresets[1].id, columns: '4', rows: '6', x: 80, y: 360 },
-  { id: 'right-imag', name: 'Right IMAG', cabinetId: cabinetPresets[1].id, columns: '4', rows: '6', x: 720, y: 360 },
+  { id: 'main', name: 'Главный экран сцены', cabinetId: cabinetPresets[0].id, columns: '12', rows: '4', x: 120, y: 120 },
+  { id: 'left-imag', name: 'Левый IMAG', cabinetId: cabinetPresets[1].id, columns: '4', rows: '6', x: 80, y: 360 },
+  { id: 'right-imag', name: 'Правый IMAG', cabinetId: cabinetPresets[1].id, columns: '4', rows: '6', x: 720, y: 360 },
 ];
 
 const defaultProject: ProjectState = {
@@ -46,16 +55,123 @@ const defaultProject: ProjectState = {
   screens: initialScreens,
   activeScreenId: initialScreens[0].id,
   numberingMode: 'rows',
+  language: 'ru',
+};
+
+const translations = {
+  ru: {
+    tagline: 'Инженерная платформа для LED-экранов',
+    saved: 'Сохранено',
+    saving: 'Сохранение...',
+    local: 'Сохранено локально',
+    error: 'Ошибка сохранения',
+    localMode: 'локальный режим',
+    newProject: 'Новый проект',
+    saveProject: 'Сохранить проект',
+    newScreen: '+ Новый экран',
+    numbering: 'Нумерация',
+    map: 'Карта',
+    library: 'Библиотека',
+    settings: 'Настройки',
+    fit: 'Вписать',
+    project: 'Проект',
+    screens: 'Экраны',
+    screen: 'Экран',
+    cabinet: 'Кабинет',
+    calc: 'Расчет',
+    addScreen: '+ Добавить экран',
+    workspace: 'Рабочая область / Несколько экранов проекта',
+    cabinets: 'Кабинеты',
+    resolution: 'Разрешение',
+    size: 'Размер',
+    selectedCabinet: 'Выбран кабинет',
+    row: 'ряд',
+    column: 'колонка',
+    activeScreenNote: 'Активный экран проекта. Изменения применяются и сохраняются автоматически.',
+    screenName: 'Название экрана',
+    cabinetType: 'Тип кабинета',
+    cabinetGrid: 'Сетка кабинетов',
+    width: 'Ширина',
+    height: 'Высота',
+    rows: 'По рядам',
+    snake: 'Змейка',
+    deleteScreen: 'Удалить экран',
+    selectedCabinetTitle: 'Выбранный кабинет',
+    position: 'Позиция',
+    model: 'Модель',
+    name: 'Название',
+    manufacturer: 'Производитель',
+    weight: 'Вес',
+    averagePower: 'Средняя мощность',
+    maxPower: 'Макс. мощность',
+    config: 'Конфиг',
+    activeScreen: 'Активный экран',
+    physicalSize: 'Физический размер',
+    area: 'Площадь',
+    wholeProject: 'Весь проект',
+    power: 'Мощность',
+    duplicateScreen: 'Дублировать экран',
+    fitView: 'Вписать вид',
+    contextAddScreen: 'Добавить экран здесь',
+  },
+  en: {
+    tagline: 'Professional LED screen engineering platform',
+    saved: 'Saved',
+    saving: 'Saving...',
+    local: 'Saved locally',
+    error: 'Save error',
+    localMode: 'local mode',
+    newProject: 'New Project',
+    saveProject: 'Save Project',
+    newScreen: '+ New Screen',
+    numbering: 'Numbering',
+    map: 'Map',
+    library: 'Library',
+    settings: 'Settings',
+    fit: 'Fit',
+    project: 'Project',
+    screens: 'Screens',
+    screen: 'Screen',
+    cabinet: 'Cabinet',
+    calc: 'Calc',
+    addScreen: '+ Add screen',
+    workspace: 'Workspace / Multi-screen project',
+    cabinets: 'Cabinets',
+    resolution: 'Resolution',
+    size: 'Size',
+    selectedCabinet: 'Selected cabinet',
+    row: 'row',
+    column: 'column',
+    activeScreenNote: 'Active project screen. Changes are applied and saved automatically.',
+    screenName: 'Screen name',
+    cabinetType: 'Cabinet type',
+    cabinetGrid: 'Cabinet grid',
+    width: 'Width',
+    height: 'Height',
+    rows: 'Rows',
+    snake: 'Snake',
+    deleteScreen: 'Delete screen',
+    selectedCabinetTitle: 'Selected cabinet',
+    position: 'Position',
+    model: 'Model',
+    name: 'Name',
+    manufacturer: 'Manufacturer',
+    weight: 'Weight',
+    averagePower: 'Average power',
+    maxPower: 'Max power',
+    config: 'Config',
+    activeScreen: 'Active screen',
+    physicalSize: 'Physical size',
+    area: 'Area',
+    wholeProject: 'Whole project',
+    power: 'Power',
+    duplicateScreen: 'Duplicate screen',
+    fitView: 'Fit view',
+    contextAddScreen: 'Add screen here',
+  },
 };
 
 const getCabinet = (cabinetId: string): Cabinet => cabinetPresets.find((preset) => preset.id === cabinetId) ?? cabinetPresets[0];
-
-const saveStatusLabel: Record<SaveStatus, string> = {
-  saved: 'Saved',
-  saving: 'Saving...',
-  local: 'Saved locally',
-  error: 'Save error',
-};
 
 export default function Home() {
   const [projectName, setProjectName] = useState(defaultProject.projectName);
@@ -66,9 +182,12 @@ export default function Home() {
   const [numberingMode, setNumberingMode] = useState<NumberingMode>(defaultProject.numberingMode);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>('screen');
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
+  const [language, setLanguage] = useState<Language>('ru');
   const [draggingScreenId, setDraggingScreenId] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenu>(null);
   const dragRef = useRef<{ id: string; startX: number; startY: number; originalX: number; originalY: number } | null>(null);
   const didLoadRef = useRef(false);
+  const t = translations[language];
 
   const activeDraft = screens.find((item) => item.id === activeScreenId) ?? screens[0];
   const cabinet = getCabinet(activeDraft.cabinetId);
@@ -124,7 +243,27 @@ export default function Home() {
     screens,
     activeScreenId,
     numberingMode,
-  }), [projectName, screens, activeScreenId, numberingMode]);
+    language,
+  }), [projectName, screens, activeScreenId, numberingMode, language]);
+
+  const saveProjectNow = async (payload = projectPayload) => {
+    setSaveStatus('saving');
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+
+    if (!supabase) {
+      setSaveStatus('local');
+      return;
+    }
+
+    const { error } = await supabase.from('projects').upsert({
+      id: payload.id,
+      name: payload.projectName,
+      data: payload,
+      updated_at: new Date().toISOString(),
+    });
+
+    setSaveStatus(error ? 'local' : 'saved');
+  };
 
   useEffect(() => {
     const loadProject = async () => {
@@ -136,6 +275,7 @@ export default function Home() {
           setScreens(parsed.screens?.length ? parsed.screens : defaultProject.screens);
           setActiveScreenId(parsed.activeScreenId ?? defaultProject.activeScreenId);
           setNumberingMode(parsed.numberingMode ?? defaultProject.numberingMode);
+          setLanguage(parsed.language ?? 'ru');
           setSaveStatus('local');
         }
 
@@ -152,6 +292,7 @@ export default function Home() {
             setScreens(cloudProject.screens?.length ? cloudProject.screens : defaultProject.screens);
             setActiveScreenId(cloudProject.activeScreenId ?? defaultProject.activeScreenId);
             setNumberingMode(cloudProject.numberingMode ?? defaultProject.numberingMode);
+            setLanguage(cloudProject.language ?? 'ru');
             setSaveStatus('saved');
           }
         }
@@ -171,22 +312,7 @@ export default function Home() {
     setSaveStatus('saving');
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(projectPayload));
 
-    const timeout = window.setTimeout(async () => {
-      if (!supabase) {
-        setSaveStatus('local');
-        return;
-      }
-
-      const { error } = await supabase.from('projects').upsert({
-        id: CLOUD_PROJECT_ID,
-        name: projectPayload.projectName,
-        data: projectPayload,
-        updated_at: new Date().toISOString(),
-      });
-
-      setSaveStatus(error ? 'local' : 'saved');
-    }, 700);
-
+    const timeout = window.setTimeout(() => saveProjectNow(projectPayload), 700);
     return () => window.clearTimeout(timeout);
   }, [projectPayload]);
 
@@ -194,34 +320,76 @@ export default function Home() {
     setScreens((items) => items.map((item) => item.id === activeDraft.id ? { ...item, ...patch } : item));
   };
 
-  const addScreen = () => {
+  const addScreen = (x?: number, y?: number) => {
     const nextNumber = screens.length + 1;
     const id = `screen-${Date.now()}`;
-    setScreens((items) => [
-      ...items,
-      {
-        id,
-        name: `Screen ${nextNumber}`,
-        cabinetId: cabinetPresets[0].id,
-        columns: '6',
-        rows: '3',
-        x: 260 + nextNumber * 34,
-        y: 180 + nextNumber * 28,
-      },
-    ]);
+    const newScreen: ScreenDraft = {
+      id,
+      name: language === 'ru' ? `Экран ${nextNumber}` : `Screen ${nextNumber}`,
+      cabinetId: cabinetPresets[0].id,
+      columns: '6',
+      rows: '3',
+      x: x ?? 260 + nextNumber * 34,
+      y: y ?? 180 + nextNumber * 28,
+    };
+    setScreens((items) => [...items, newScreen]);
     setActiveScreenId(id);
     setSelectedCabinet(1);
+    setContextMenu(null);
   };
 
-  const deleteActiveScreen = () => {
+  const duplicateScreen = (screenId = activeScreenId) => {
+    const source = screens.find((item) => item.id === screenId) ?? activeDraft;
+    const id = `screen-${Date.now()}`;
+    const copy: ScreenDraft = {
+      ...source,
+      id,
+      name: language === 'ru' ? `${source.name} копия` : `${source.name} copy`,
+      x: source.x + 40,
+      y: source.y + 40,
+    };
+    setScreens((items) => [...items, copy]);
+    setActiveScreenId(id);
+    setSelectedCabinet(1);
+    setContextMenu(null);
+  };
+
+  const deleteScreen = (screenId = activeScreenId) => {
     if (screens.length <= 1) return;
-    const remaining = screens.filter((item) => item.id !== activeDraft.id);
+    const remaining = screens.filter((item) => item.id !== screenId);
     setScreens(remaining);
     setActiveScreenId(remaining[0].id);
     setSelectedCabinet(1);
+    setContextMenu(null);
   };
 
-  const fitWorkspace = () => setZoom(90);
+  const newProject = () => {
+    const freshScreen: ScreenDraft = {
+      id: `screen-${Date.now()}`,
+      name: language === 'ru' ? 'Главный экран' : 'Main Screen',
+      cabinetId: cabinetPresets[0].id,
+      columns: '12',
+      rows: '4',
+      x: 260,
+      y: 180,
+    };
+    setProjectName(language === 'ru' ? 'Новый проект' : 'New Project');
+    setScreens([freshScreen]);
+    setActiveScreenId(freshScreen.id);
+    setSelectedCabinet(1);
+    setContextMenu(null);
+  };
+
+  const fitWorkspace = () => {
+    setZoom(90);
+    setContextMenu(null);
+  };
+
+  const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const direction = event.deltaY > 0 ? -5 : 5;
+    setZoom((value) => Math.min(180, Math.max(45, value + direction)));
+  };
 
   const startScreenDrag = (event: PointerEvent<HTMLDivElement>, draft: ScreenDraft) => {
     const target = event.target as HTMLElement;
@@ -255,28 +423,45 @@ export default function Home() {
     setDraggingScreenId(null);
   };
 
+  const showStageContext = (event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setContextMenu({ x: event.clientX, y: event.clientY, target: 'stage' });
+  };
+
+  const showScreenContext = (event: React.MouseEvent<HTMLDivElement>, screenId: string) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setActiveScreenId(screenId);
+    setContextMenu({ x: event.clientX, y: event.clientY, target: 'screen', screenId });
+  };
+
   return (
-    <main className="app-shell">
+    <main className="app-shell" onClick={() => setContextMenu(null)}>
       <header className="topbar">
         <div className="brand">
           <strong>SHANTARAM Studio</strong>
-          <span>Professional LED screen engineering platform</span>
+          <span>{t.tagline}</span>
         </div>
         <div className="top-actions">
           <span className={`saved-dot ${saveStatus}`} />
-          <span>{saveStatusLabel[saveStatus]}{isSupabaseConfigured ? '' : ' · local mode'}</span>
-          <div className="lang"><span>EN</span><span>RU</span></div>
+          <span>{t[saveStatus]}{isSupabaseConfigured ? '' : ` · ${t.localMode}`}</span>
+          <div className="lang">
+            <button className={language === 'ru' ? 'active' : ''} onClick={() => setLanguage('ru')}>RU</button>
+            <button className={language === 'en' ? 'active' : ''} onClick={() => setLanguage('en')}>EN</button>
+          </div>
         </div>
       </header>
 
       <nav className="toolbar">
-        <button className="tool-button primary" onClick={addScreen}>+ New Screen</button>
-        <button className="tool-button">Numbering</button>
-        <button className="tool-button">Map</button>
-        <button className="tool-button ghost">Library</button>
-        <button className="tool-button ghost">Settings</button>
+        <button className="tool-button primary" onClick={() => addScreen()}>{t.newScreen}</button>
+        <button className="tool-button" onClick={newProject}>{t.newProject}</button>
+        <button className="tool-button" onClick={() => saveProjectNow()}>{t.saveProject}</button>
+        <button className="tool-button ghost">{t.numbering}</button>
+        <button className="tool-button ghost">{t.map}</button>
+        <button className="tool-button ghost">{t.library}</button>
+        <button className="tool-button ghost">{t.settings}</button>
         <div className="toolbar-spacer" />
-        <button className="tool-button ghost" onClick={fitWorkspace}>Fit</button>
+        <button className="tool-button ghost" onClick={fitWorkspace}>{t.fit}</button>
         <div className="zoom-controls">
           <button onClick={() => setZoom((value) => Math.max(45, value - 10))}>−</button>
           <span>{zoom}%</span>
@@ -287,11 +472,11 @@ export default function Home() {
       <section className="workspace">
         <aside className="project-tree">
           <label className="project-title-field">
-            <span>Project</span>
+            <span>{t.project}</span>
             <input value={projectName} onChange={(event) => setProjectName(event.target.value)} />
           </label>
 
-          <div className="tree-section-title">Screens</div>
+          <div className="tree-section-title">{t.screens}</div>
           <div className="screen-list">
             {screens.map((draft) => {
               const model = calculateScreen({
@@ -316,28 +501,28 @@ export default function Home() {
             })}
           </div>
 
-          <button className="add-screen-small" onClick={addScreen}>+ Add screen</button>
+          <button className="add-screen-small" onClick={() => addScreen()}>{t.addScreen}</button>
         </aside>
 
-        <div className="stage">
+        <div className="stage" onWheel={handleWheel} onContextMenu={showStageContext}>
           <div className="screen-create-panel">
             <div className="panel-heading">
               <span>{projectName}</span>
               <strong>{screen.name}</strong>
             </div>
             <div className="quick-grid">
-              <div><span>Screens</span><strong>{screens.length}</strong></div>
-              <div><span>Cabinets</span><strong>{screen.columns} × {screen.rows}</strong></div>
-              <div><span>Resolution</span><strong>{screen.calculated.resolutionX} × {screen.calculated.resolutionY} px</strong></div>
-              <div><span>Size</span><strong>{screen.calculated.widthM} × {screen.calculated.heightM} m</strong></div>
+              <div><span>{t.screens}</span><strong>{screens.length}</strong></div>
+              <div><span>{t.cabinets}</span><strong>{screen.columns} × {screen.rows}</strong></div>
+              <div><span>{t.resolution}</span><strong>{screen.calculated.resolutionX} × {screen.calculated.resolutionY} px</strong></div>
+              <div><span>{t.size}</span><strong>{screen.calculated.widthM} × {screen.calculated.heightM} m</strong></div>
             </div>
           </div>
 
-          <div className="stage-label">Workspace / Multi-screen project</div>
+          <div className="stage-label">{t.workspace}</div>
           <div className="floating-card">
-            <span>Selected cabinet</span>
+            <span>{t.selectedCabinet}</span>
             <strong>#{selected?.label ?? 1}</strong>
-            <small>{screen.name} · row {selected?.row ?? 1}, column {selected?.col ?? 1}</small>
+            <small>{screen.name} · {t.row} {selected?.row ?? 1}, {t.column} {selected?.col ?? 1}</small>
           </div>
 
           <div className="stage-inner project-canvas">
@@ -362,6 +547,7 @@ export default function Home() {
                     onPointerMove={moveScreenDrag}
                     onPointerUp={endScreenDrag}
                     onPointerCancel={endScreenDrag}
+                    onContextMenu={(event) => showScreenContext(event, draft.id)}
                   >
                     <div className="screen-object-title">{draft.name}</div>
                     <div
@@ -389,7 +575,7 @@ export default function Home() {
                               setActiveScreenId(draft.id);
                               setSelectedCabinet(number);
                             }}
-                            title={`${draft.name}. Cabinet #${label}`}
+                            title={`${draft.name}. ${t.cabinet} #${label}`}
                           >
                             {label}
                           </button>
@@ -401,27 +587,41 @@ export default function Home() {
               })}
             </div>
           </div>
+
+          {contextMenu && (
+            <div className="context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={(event) => event.stopPropagation()}>
+              {contextMenu.target === 'screen' && (
+                <>
+                  <button onClick={() => duplicateScreen(contextMenu.screenId)}>{t.duplicateScreen}</button>
+                  <button onClick={() => deleteScreen(contextMenu.screenId)} disabled={screens.length <= 1}>{t.deleteScreen}</button>
+                </>
+              )}
+              <button onClick={() => addScreen()}>{t.contextAddScreen}</button>
+              <button onClick={fitWorkspace}>{t.fitView}</button>
+              <button onClick={() => saveProjectNow()}>{t.saveProject}</button>
+            </div>
+          )}
         </div>
 
         <aside className="inspector screen-builder">
           <h2>{screen.name}</h2>
-          <p className="inspector-note">Active project screen. Changes are applied and saved automatically.</p>
+          <p className="inspector-note">{t.activeScreenNote}</p>
 
           <div className="inspector-tabs">
-            <button className={inspectorTab === 'screen' ? 'active' : ''} onClick={() => setInspectorTab('screen')}>Screen</button>
-            <button className={inspectorTab === 'cabinet' ? 'active' : ''} onClick={() => setInspectorTab('cabinet')}>Cabinet</button>
-            <button className={inspectorTab === 'calc' ? 'active' : ''} onClick={() => setInspectorTab('calc')}>Calc</button>
+            <button className={inspectorTab === 'screen' ? 'active' : ''} onClick={() => setInspectorTab('screen')}>{t.screen}</button>
+            <button className={inspectorTab === 'cabinet' ? 'active' : ''} onClick={() => setInspectorTab('cabinet')}>{t.cabinet}</button>
+            <button className={inspectorTab === 'calc' ? 'active' : ''} onClick={() => setInspectorTab('calc')}>{t.calc}</button>
           </div>
 
           {inspectorTab === 'screen' && (
             <div className="tab-panel">
               <label className="field">
-                <span>Screen name</span>
+                <span>{t.screenName}</span>
                 <input value={activeDraft.name} onChange={(event) => updateActiveScreen({ name: event.target.value })} />
               </label>
 
               <label className="field">
-                <span>Cabinet type</span>
+                <span>{t.cabinetType}</span>
                 <select value={activeDraft.cabinetId} onChange={(event) => updateActiveScreen({ cabinetId: event.target.value })}>
                   {cabinetPresets.map((preset) => (
                     <option value={preset.id} key={preset.id}>{preset.name}</option>
@@ -429,74 +629,74 @@ export default function Home() {
                 </select>
               </label>
 
-              <div className="section-title">Cabinet grid</div>
+              <div className="section-title">{t.cabinetGrid}</div>
               <div className="field-row">
                 <label className="field">
-                  <span>Width</span>
+                  <span>{t.width}</span>
                   <input value={activeDraft.columns} inputMode="numeric" onChange={(event) => updateActiveScreen({ columns: event.target.value })} />
                 </label>
                 <label className="field">
-                  <span>Height</span>
+                  <span>{t.height}</span>
                   <input value={activeDraft.rows} inputMode="numeric" onChange={(event) => updateActiveScreen({ rows: event.target.value })} />
                 </label>
               </div>
 
-              <div className="section-title">Numbering</div>
+              <div className="section-title">{t.numbering}</div>
               <div className="segmented">
-                <button className={numberingMode === 'rows' ? 'active' : ''} onClick={() => setNumberingMode('rows')}>Rows</button>
-                <button className={numberingMode === 'snake' ? 'active' : ''} onClick={() => setNumberingMode('snake')}>Snake</button>
+                <button className={numberingMode === 'rows' ? 'active' : ''} onClick={() => setNumberingMode('rows')}>{t.rows}</button>
+                <button className={numberingMode === 'snake' ? 'active' : ''} onClick={() => setNumberingMode('snake')}>{t.snake}</button>
               </div>
 
-              <button className="danger-button" onClick={deleteActiveScreen} disabled={screens.length <= 1}>Delete screen</button>
+              <button className="danger-button" onClick={() => deleteScreen()} disabled={screens.length <= 1}>{t.deleteScreen}</button>
             </div>
           )}
 
           {inspectorTab === 'cabinet' && (
             <div className="tab-panel">
-              <div className="section-title">Selected cabinet</div>
+              <div className="section-title">{t.selectedCabinetTitle}</div>
               <div className="prop"><span>ID</span><strong>#{selected?.label ?? 1}</strong></div>
-              <div className="prop"><span>Position</span><strong>Row {selected?.row ?? 1}, column {selected?.col ?? 1}</strong></div>
-              <div className="prop"><span>Size</span><strong>{cabinet.widthMm} × {cabinet.heightMm} mm</strong></div>
-              <div className="prop"><span>Resolution</span><strong>{cabinet.pixelsX} × {cabinet.pixelsY} px</strong></div>
+              <div className="prop"><span>{t.position}</span><strong>{t.row} {selected?.row ?? 1}, {t.column} {selected?.col ?? 1}</strong></div>
+              <div className="prop"><span>{t.size}</span><strong>{cabinet.widthMm} × {cabinet.heightMm} mm</strong></div>
+              <div className="prop"><span>{t.resolution}</span><strong>{cabinet.pixelsX} × {cabinet.pixelsY} px</strong></div>
 
-              <div className="section-title">Model</div>
-              <div className="prop"><span>Name</span><strong>{cabinet.name}</strong></div>
-              <div className="prop"><span>Manufacturer</span><strong>{cabinet.manufacturer}</strong></div>
-              <div className="prop"><span>Weight</span><strong>{cabinet.weightKg} kg</strong></div>
-              <div className="prop"><span>Average power</span><strong>{cabinet.avgPowerW} W</strong></div>
-              <div className="prop"><span>Max power</span><strong>{cabinet.maxPowerW} W</strong></div>
-              <div className="prop"><span>Config</span><strong>{cabinet.configFile}</strong></div>
+              <div className="section-title">{t.model}</div>
+              <div className="prop"><span>{t.name}</span><strong>{cabinet.name}</strong></div>
+              <div className="prop"><span>{t.manufacturer}</span><strong>{cabinet.manufacturer}</strong></div>
+              <div className="prop"><span>{t.weight}</span><strong>{cabinet.weightKg} kg</strong></div>
+              <div className="prop"><span>{t.averagePower}</span><strong>{cabinet.avgPowerW} W</strong></div>
+              <div className="prop"><span>{t.maxPower}</span><strong>{cabinet.maxPowerW} W</strong></div>
+              <div className="prop"><span>{t.config}</span><strong>{cabinet.configFile}</strong></div>
             </div>
           )}
 
           {inspectorTab === 'calc' && (
             <div className="tab-panel">
-              <div className="section-title">Active screen</div>
-              <div className="prop"><span>Cabinets</span><strong>{screen.calculated.cabinets}</strong></div>
-              <div className="prop"><span>Physical size</span><strong>{screen.calculated.widthM} × {screen.calculated.heightM} m</strong></div>
-              <div className="prop"><span>Resolution</span><strong>{screen.calculated.resolutionX} × {screen.calculated.resolutionY}</strong></div>
-              <div className="prop"><span>Area</span><strong>{screen.calculated.areaM2} m²</strong></div>
-              <div className="prop"><span>Weight</span><strong>{screen.calculated.weightKg} kg</strong></div>
-              <div className="prop"><span>Average power</span><strong>{screen.calculated.avgPowerKw} kW</strong></div>
-              <div className="prop"><span>Max power</span><strong>{screen.calculated.maxPowerKw} kW</strong></div>
+              <div className="section-title">{t.activeScreen}</div>
+              <div className="prop"><span>{t.cabinets}</span><strong>{screen.calculated.cabinets}</strong></div>
+              <div className="prop"><span>{t.physicalSize}</span><strong>{screen.calculated.widthM} × {screen.calculated.heightM} m</strong></div>
+              <div className="prop"><span>{t.resolution}</span><strong>{screen.calculated.resolutionX} × {screen.calculated.resolutionY}</strong></div>
+              <div className="prop"><span>{t.area}</span><strong>{screen.calculated.areaM2} m²</strong></div>
+              <div className="prop"><span>{t.weight}</span><strong>{screen.calculated.weightKg} kg</strong></div>
+              <div className="prop"><span>{t.averagePower}</span><strong>{screen.calculated.avgPowerKw} kW</strong></div>
+              <div className="prop"><span>{t.maxPower}</span><strong>{screen.calculated.maxPowerKw} kW</strong></div>
 
-              <div className="section-title">Whole project</div>
-              <div className="prop"><span>Screens</span><strong>{screens.length}</strong></div>
-              <div className="prop"><span>Cabinets</span><strong>{projectTotals.cabinets}</strong></div>
-              <div className="prop"><span>Area</span><strong>{projectTotals.areaM2.toFixed(2)} m²</strong></div>
-              <div className="prop"><span>Weight</span><strong>{projectTotals.weightKg.toFixed(1)} kg</strong></div>
-              <div className="prop"><span>Power</span><strong>{projectTotals.avgPowerKw.toFixed(2)} / {projectTotals.maxPowerKw.toFixed(2)} kW</strong></div>
+              <div className="section-title">{t.wholeProject}</div>
+              <div className="prop"><span>{t.screens}</span><strong>{screens.length}</strong></div>
+              <div className="prop"><span>{t.cabinets}</span><strong>{projectTotals.cabinets}</strong></div>
+              <div className="prop"><span>{t.area}</span><strong>{projectTotals.areaM2.toFixed(2)} m²</strong></div>
+              <div className="prop"><span>{t.weight}</span><strong>{projectTotals.weightKg.toFixed(1)} kg</strong></div>
+              <div className="prop"><span>{t.power}</span><strong>{projectTotals.avgPowerKw.toFixed(2)} / {projectTotals.maxPowerKw.toFixed(2)} kW</strong></div>
             </div>
           )}
         </aside>
       </section>
 
       <footer className="statusbar">
-        <div className="status-item"><span>Project</span><strong>{projectName}</strong></div>
-        <div className="status-item"><span>Screens</span><strong>{screens.length}</strong></div>
-        <div className="status-item"><span>Cabinets</span><strong>{projectTotals.cabinets}</strong></div>
-        <div className="status-item"><span>Area</span><strong>{projectTotals.areaM2.toFixed(2)} m²</strong></div>
-        <div className="status-item"><span>Power</span><strong>{projectTotals.avgPowerKw.toFixed(2)} / {projectTotals.maxPowerKw.toFixed(2)} kW</strong></div>
+        <div className="status-item"><span>{t.project}</span><strong>{projectName}</strong></div>
+        <div className="status-item"><span>{t.screens}</span><strong>{screens.length}</strong></div>
+        <div className="status-item"><span>{t.cabinets}</span><strong>{projectTotals.cabinets}</strong></div>
+        <div className="status-item"><span>{t.area}</span><strong>{projectTotals.areaM2.toFixed(2)} m²</strong></div>
+        <div className="status-item"><span>{t.power}</span><strong>{projectTotals.avgPowerKw.toFixed(2)} / {projectTotals.maxPowerKw.toFixed(2)} kW</strong></div>
       </footer>
     </main>
   );

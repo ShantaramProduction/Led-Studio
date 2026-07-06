@@ -1,5 +1,11 @@
 const cabinets = Array.from({ length: 48 }, (_, index) => index + 1);
 
+const cabinetPresets = [
+  'P2.97 Outdoor 500×500',
+  'P3.91 Rental 500×500',
+  'P2.6 Indoor 500×500',
+];
+
 export default function Home() {
   return (
     <main className="app-shell">
@@ -19,30 +25,26 @@ export default function Home() {
         <button className="tool-button primary">+ Новый экран</button>
         <button className="tool-button">Нумерация</button>
         <button className="tool-button">Карта</button>
-        <button className="tool-button">Экспорт</button>
         <button className="tool-button ghost">Библиотека</button>
         <button className="tool-button ghost">Настройки</button>
       </nav>
 
       <section className="workspace">
         <div className="stage">
-          <div className="project-panel">
-            <div>
-              <span>Проект</span>
-              <strong>Корпоративное мероприятие</strong>
-            </div>
-            <div>
-              <span>Экран</span>
+          <div className="screen-create-panel">
+            <div className="panel-heading">
+              <span>Создание экрана</span>
               <strong>Главный экран сцены</strong>
             </div>
-            <div>
-              <span>Кабинет</span>
-              <strong>P2.97 Outdoor 500×500</strong>
+            <div className="quick-grid">
+              <div><span>Кабинеты</span><strong>12 × 4</strong></div>
+              <div><span>Кабинет</span><strong>500 × 500 мм</strong></div>
+              <div><span>Разрешение</span><strong>2016 × 672 px</strong></div>
+              <div><span>Размер</span><strong>6.0 × 2.0 м</strong></div>
             </div>
-            <button className="documentation-button">Создать документацию</button>
           </div>
 
-          <div className="stage-label">Рабочая область / Главный экран сцены</div>
+          <div className="stage-label">Рабочая область / Предпросмотр экрана</div>
           <div className="stage-inner">
             <div className="screen-card" aria-label="Предпросмотр LED-экрана">
               <div className="cabinet-grid">
@@ -54,20 +56,65 @@ export default function Home() {
           </div>
         </div>
 
-        <aside className="inspector">
-          <h2>Инспектор</h2>
-          <div className="section-title">Проект</div>
-          <div className="prop"><span>Название</span><strong>Корпоративное мероприятие</strong></div>
-          <div className="prop"><span>Площадка</span><strong>Сцена 1</strong></div>
-          <div className="prop"><span>Ответственный</span><strong>SHANTARAM</strong></div>
+        <aside className="inspector screen-builder">
+          <h2>Новый экран</h2>
+          <p className="inspector-note">Заполни параметры экрана. Предпросмотр и расчеты должны обновляться сразу.</p>
 
-          <div className="section-title">Экран</div>
-          <div className="prop"><span>Объект</span><strong>Экран</strong></div>
-          <div className="prop"><span>Кабинеты</span><strong>12 × 4</strong></div>
-          <div className="prop"><span>Кабинет px</span><strong>168 × 168</strong></div>
+          <label className="field">
+            <span>Название экрана</span>
+            <input defaultValue="Главный экран сцены" />
+          </label>
+
+          <label className="field">
+            <span>Тип кабинета</span>
+            <select defaultValue={cabinetPresets[0]}>
+              {cabinetPresets.map((preset) => (
+                <option key={preset}>{preset}</option>
+              ))}
+            </select>
+          </label>
+
+          <div className="section-title">Сетка кабинетов</div>
+          <div className="field-row">
+            <label className="field">
+              <span>Ширина</span>
+              <input defaultValue="12" />
+            </label>
+            <label className="field">
+              <span>Высота</span>
+              <input defaultValue="4" />
+            </label>
+          </div>
+
+          <div className="section-title">Кабинет</div>
+          <div className="field-row">
+            <label className="field">
+              <span>Ширина, мм</span>
+              <input defaultValue="500" />
+            </label>
+            <label className="field">
+              <span>Высота, мм</span>
+              <input defaultValue="500" />
+            </label>
+          </div>
+          <div className="field-row">
+            <label className="field">
+              <span>Пиксели X</span>
+              <input defaultValue="168" />
+            </label>
+            <label className="field">
+              <span>Пиксели Y</span>
+              <input defaultValue="168" />
+            </label>
+          </div>
+
+          <div className="section-title">Расчет</div>
+          <div className="prop"><span>Кабинеты</span><strong>48</strong></div>
+          <div className="prop"><span>Физический размер</span><strong>6.0 × 2.0 м</strong></div>
           <div className="prop"><span>Разрешение</span><strong>2016 × 672</strong></div>
-          <div className="prop"><span>Размер</span><strong>6.0 × 2.0 м</strong></div>
-          <div className="prop"><span>Карта</span><strong>ID кабинетов</strong></div>
+          <div className="prop"><span>Площадь</span><strong>12.0 м²</strong></div>
+
+          <button className="create-screen-button">Создать экран</button>
         </aside>
       </section>
 
@@ -76,7 +123,7 @@ export default function Home() {
         <div className="status-item"><span>Кабинеты</span><strong>48</strong></div>
         <div className="status-item"><span>Площадь</span><strong>12.0 м²</strong></div>
         <div className="status-item"><span>Мощность</span><strong>4.8 кВт</strong></div>
-        <div className="status-item"><span>Документация</span><strong>PDF / PNG / SVG</strong></div>
+        <div className="status-item"><span>Кабинет</span><strong>P2.97 Outdoor</strong></div>
       </footer>
     </main>
   );

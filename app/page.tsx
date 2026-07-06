@@ -8,11 +8,16 @@ const toNumber = (value: string, fallback: number) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+type NumberingMode = 'rows' | 'snake';
+
 export default function Home() {
   const [screenName, setScreenName] = useState('Главный экран сцены');
   const [cabinetId, setCabinetId] = useState(cabinetPresets[0].id);
   const [columns, setColumns] = useState('12');
   const [rows, setRows] = useState('4');
+  const [zoom, setZoom] = useState(100);
+  const [selectedCabinet, setSelectedCabinet] = useState(1);
+  const [numberingMode, setNumberingMode] = useState<NumberingMode>('rows');
 
   const cabinet = useMemo<Cabinet>(() => {
     return cabinetPresets.find((preset) => preset.id === cabinetId) ?? cabinetPresets[0];
@@ -25,7 +30,22 @@ export default function Home() {
     rows: toNumber(rows, 1),
   });
 
-  const cabinets = Array.from({ length: screen.calculated.cabinets }, (_, index) => index + 1);
+  const cabinets = Array.from({ length: screen.calculated.cabinets }, (_, index) => {
+    const row = Math.floor(index / screen.columns);
+    const col = index % screen.columns;
+    const snakeNumber = row % 2 === 0
+      ? row * screen.columns + col + 1
+      : row * screen.columns + (screen.columns - col);
+
+    return {
+      id: index + 1,
+      label: numberingMode === 'snake' ? snakeNumber : index + 1,
+      row: row + 1,
+      col: col + 1,
+    };
+  });
+
+  const selected = cabinets.find((item) => item.id === selectedCabinet) ?? cabinets[0];
 
   return (
     <main className="app-shell">
@@ -47,6 +67,12 @@ export default function Home() {
         <button className="tool-button">Карта</button>
         <button className="tool-button ghost">Библиотека</button>
         <button className="tool-button ghost">Настройки</button>
+        <div className="toolbar-spacer" />
+        <div className="zoom-controls">
+          <button onClick={() => setZoom((value) => Math.max(50, value - 10))}>−</button>
+          <span>{zoom}%</span>
+          <button onClick={() => setZoom((value) => Math.min(180, value + 10))}>+</button>
+        </div>
       </nav>
 
       <section className="workspace">
@@ -65,11 +91,19 @@ export default function Home() {
           </div>
 
           <div className="stage-label">Рабочая область / Предпросмотр экрана</div>
+          <div className="floating-card">
+            <span>Выбран кабинет</span>
+            <strong>№{selected?.label ?? 1}</strong>
+            <small>Ряд {selected?.row ?? 1}, колонка {selected?.col ?? 1}</small>
+          </div>
           <div className="stage-inner">
             <div
               className="screen-card"
               aria-label="Предпросмотр LED-экрана"
-              style={{ aspectRatio: `${screen.calculated.widthMm} / ${screen.calculated.heightMm}` }}
+              style={{
+                aspectRatio: `${screen.calculated.widthMm} / ${screen.calculated.heightMm}`,
+                transform: `scale(${zoom / 100})`,
+              }}
             >
               <div
                 className="cabinet-grid"
@@ -78,8 +112,15 @@ export default function Home() {
                   gridTemplateRows: `repeat(${screen.rows}, 1fr)`,
                 }}
               >
-                {cabinets.map((number) => (
-                  <div className="cabinet" key={number}>{number}</div>
+                {cabinets.map((item) => (
+                  <button
+                    className={`cabinet ${item.id === selectedCabinet ? 'selected' : ''}`}
+                    key={item.id}
+                    onClick={() => setSelectedCabinet(item.id)}
+                    title={`Кабинет №${item.label}. Ряд ${item.row}, колонка ${item.col}`}
+                  >
+                    {item.label}
+                  </button>
                 ))}
               </div>
             </div>
@@ -116,10 +157,20 @@ export default function Home() {
             </label>
           </div>
 
-          <div className="section-title">Кабинет</div>
-          <div className="prop"><span>Производитель</span><strong>{cabinet.manufacturer}</strong></div>
+          <div className="section-title">Нумерация</div>
+          <div className="segmented">
+            <button className={numberingMode === 'rows' ? 'active' : ''} onClick={() => setNumberingMode('rows')}>По рядам</button>
+            <button className={numberingMode === 'snake' ? 'active' : ''} onClick={() => setNumberingMode('snake')}>Змейка</button>
+          </div>
+
+          <div className="section-title">Выбранный кабинет</div>
+          <div className="prop"><span>ID</span><strong>№{selected?.label ?? 1}</strong></div>
+          <div className="prop"><span>Позиция</span><strong>Ряд {selected?.row ?? 1}, колонка {selected?.col ?? 1}</strong></div>
           <div className="prop"><span>Размер</span><strong>{cabinet.widthMm} × {cabinet.heightMm} мм</strong></div>
           <div className="prop"><span>Разрешение</span><strong>{cabinet.pixelsX} × {cabinet.pixelsY} px</strong></div>
+
+          <div className="section-title">Кабинет</div>
+          <div className="prop"><span>Производитель</span><strong>{cabinet.manufacturer}</strong></div>
           <div className="prop"><span>Вес</span><strong>{cabinet.weightKg} кг</strong></div>
           <div className="prop"><span>Средняя мощность</span><strong>{cabinet.avgPowerW} Вт</strong></div>
           <div className="prop"><span>Макс. мощность</span><strong>{cabinet.maxPowerW} Вт</strong></div>

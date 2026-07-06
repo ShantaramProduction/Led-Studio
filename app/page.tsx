@@ -26,7 +26,23 @@ export default function Home() {
 
       <section className="workspace">
         <div className="stage">
-          <div className="stage-label">Рабочая область / Фестивальный LED-экран</div>
+          <div className="project-panel">
+            <div>
+              <span>Проект</span>
+              <strong>Корпоративное мероприятие</strong>
+            </div>
+            <div>
+              <span>Экран</span>
+              <strong>Главный экран сцены</strong>
+            </div>
+            <div>
+              <span>Кабинет</span>
+              <strong>P2.97 Outdoor 500×500</strong>
+            </div>
+            <button className="documentation-button">Создать документацию</button>
+          </div>
+
+          <div className="stage-label">Рабочая область / Главный экран сцены</div>
           <div className="stage-inner">
             <div className="screen-card" aria-label="Предпросмотр LED-экрана">
               <div className="cabinet-grid">
@@ -40,6 +56,12 @@ export default function Home() {
 
         <aside className="inspector">
           <h2>Инспектор</h2>
+          <div className="section-title">Проект</div>
+          <div className="prop"><span>Название</span><strong>Корпоративное мероприятие</strong></div>
+          <div className="prop"><span>Площадка</span><strong>Сцена 1</strong></div>
+          <div className="prop"><span>Ответственный</span><strong>SHANTARAM</strong></div>
+
+          <div className="section-title">Экран</div>
           <div className="prop"><span>Объект</span><strong>Экран</strong></div>
           <div className="prop"><span>Кабинеты</span><strong>12 × 4</strong></div>
           <div className="prop"><span>Кабинет px</span><strong>168 × 168</strong></div>
@@ -54,7 +76,7 @@ export default function Home() {
         <div className="status-item"><span>Кабинеты</span><strong>48</strong></div>
         <div className="status-item"><span>Площадь</span><strong>12.0 м²</strong></div>
         <div className="status-item"><span>Мощность</span><strong>4.8 кВт</strong></div>
-        <div className="status-item"><span>Экспорт</span><strong>PDF / PNG / SVG</strong></div>
+        <div className="status-item"><span>Документация</span><strong>PDF / PNG / SVG</strong></div>
       </footer>
     </main>
   );

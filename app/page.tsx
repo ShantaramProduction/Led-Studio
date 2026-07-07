@@ -3,13 +3,16 @@
 import { MouseEvent as ReactMouseEvent, PointerEvent, WheelEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { EngineeringInspector } from '../components/EngineeringInspector';
 import { buildCabinetEngineering } from '../lib/engineering-model';
+import {
+  loadProjectsCloudFirst,
+  loadProjectCloudFirst,
+  writeProjectToCloud,
+  removeProjectFromCloud,
+  writeLocalProjectCopy,
+} from '../lib/cloud-project-state';
 import { Cabinet, cabinetPresets, calculateScreen } from '../lib/screen-engine';
-import { isSupabaseConfigured, supabase } from '../lib/supabase';
+import { isSupabaseConfigured } from '../lib/supabase';
 
-const PROJECT_INDEX_KEY = 'shantaram-studio-project-index-v3';
-const PROJECT_KEY_PREFIX = 'shantaram-studio-project-v3:';
-const LEGACY_INDEX_KEY = 'shantaram-studio-project-index-v2';
-const LEGACY_KEY_PREFIX = 'shantaram-studio-project-v2:';
 const SESSION_KEY = 'shantaram-studio-admin-session';
 const SNAP_SIZE = 20;
 
@@ -81,17 +84,15 @@ const snap = (value: number, enabled: boolean) => enabled ? Math.round(value / S
 const getCabinet = (cabinetId: string): Cabinet => cabinetPresets.find((preset) => preset.id === cabinetId) ?? cabinetPresets[0];
 
 const makeInitialScreens = (language: Language): ScreenDraft[] => [
-  { id: 'main', name: language === 'ru' ? 'Главный экран сцены' : 'Main Stage Screen', cabinetId: cabinetPresets[0].id, columns: '12', rows: '4', x: 120, y: 120, visible: true },
-  { id: 'left-imag', name: language === 'ru' ? 'Левый IMAG' : 'Left IMAG', cabinetId: cabinetPresets[1].id, columns: '4', rows: '6', x: 80, y: 360, visible: true },
-  { id: 'right-imag', name: language === 'ru' ? 'Правый IMAG' : 'Right IMAG', cabinetId: cabinetPresets[1].id, columns: '4', rows: '6', x: 720, y: 360, visible: true },
+  { id: 'main', name: language === 'ru' ? 'Главный экран' : 'Main Screen', cabinetId: cabinetPresets[0].id, columns: '12', rows: '4', x: 120, y: 120, visible: true },
 ];
 
-const createProject = (language: Language, name?: string): ProjectState => {
-  const screens = makeInitialScreens(language);
+const createProject = (language: Language): ProjectState => {
   const now = new Date().toISOString();
+  const screens = makeInitialScreens(language);
   return {
     id: `project-${Date.now()}`,
-    projectName: name ?? (language === 'ru' ? 'Новый LED-проект' : 'New LED Project'),
+    projectName: language === 'ru' ? 'Новый LED-проект' : 'New LED Project',
     description: language === 'ru' ? 'Проект LED-экранов' : 'LED screen project',
     author: 'admin',
     version: 1,
@@ -106,29 +107,29 @@ const createProject = (language: Language, name?: string): ProjectState => {
 
 const translations = {
   ru: {
-    tagline: 'Инженерная платформа для LED-экранов', loginTitle: 'Вход в SHANTARAM Studio', loginSubtitle: 'Текущий режим: администратор без пароля. Позже заменим на нормальную авторизацию.', enterAsAdmin: 'Войти как admin', admin: 'admin',
-    saved: 'Сохранено', saving: 'Сохранение...', local: 'Сохранено локально', error: 'Ошибка сохранения', localMode: 'локальный режим',
-    dashboard: 'Проекты', recentProjects: 'Сохранённые проекты', emptyProjects: 'Пока проектов нет. Создай первый, и тут появится склад инженерных чудес.', newProject: 'Новый проект', backToProjects: 'Все проекты', saveProject: 'Сохранить проект',
+    tagline: 'Инженерная платформа для LED-экранов', loginTitle: 'Вход в SHANTARAM Studio', loginSubtitle: 'Текущий режим: admin без пароля. Проекты сохраняются в облако.', enterAsAdmin: 'Войти как admin', admin: 'admin',
+    saved: 'Сохранено в облаке', saving: 'Сохранение...', local: 'Локальная копия / ожидает синхронизации', error: 'Ошибка сохранения', localMode: 'Supabase не настроен',
+    dashboard: 'Проекты', recentProjects: 'Сохранённые проекты', emptyProjects: 'Пока проектов нет. Создай первый проект.', newProject: 'Новый проект', backToProjects: 'Все проекты', saveProject: 'Сохранить проект',
     open: 'Открыть', duplicate: 'Дублировать', delete: 'Удалить', updated: 'Изменён', created: 'Создан', author: 'Автор', version: 'Версия', description: 'Описание',
     newScreen: '+ Новый экран', numbering: 'Нумерация', map: 'Карта', library: 'Библиотека', settings: 'Настройки', fit: 'Вписать', project: 'Проект', screens: 'Экраны', screen: 'Экран', cabinet: 'Кабинет', engineering: 'Инж.', calc: 'Расчет', canvas: 'Холст', addScreen: '+ Добавить экран',
-    workspace: 'CAD-холст / Несколько экранов проекта', cabinets: 'Кабинеты', resolution: 'Разрешение', size: 'Размер', selectedCabinet: 'Выбран кабинет', row: 'ряд', column: 'колонка', activeScreenNote: 'Активный экран проекта. Изменения применяются и сохраняются автоматически.',
+    workspace: 'CAD-холст / Несколько экранов проекта', cabinets: 'Кабинеты', resolution: 'Разрешение', size: 'Размер', selectedCabinet: 'Выбран кабинет', row: 'ряд', column: 'колонка', activeScreenNote: 'Активный экран проекта. Изменения сохраняются в облако.',
     screenName: 'Название экрана', cabinetType: 'Тип кабинета', cabinetGrid: 'Сетка кабинетов', width: 'Ширина', height: 'Высота', rows: 'По рядам', snake: 'Змейка', deleteScreen: 'Удалить экран', duplicateScreen: 'Дублировать экран', selectedCabinetTitle: 'Выбранный кабинет',
     position: 'Позиция', model: 'Модель', name: 'Название', manufacturer: 'Производитель', weight: 'Вес', averagePower: 'Средняя мощность', maxPower: 'Макс. мощность', config: 'Конфиг', activeScreen: 'Активный экран', physicalSize: 'Физический размер', area: 'Площадь', wholeProject: 'Весь проект', power: 'Мощность',
     fitView: 'Вписать вид', contextAddScreen: 'Добавить экран здесь', snapToGrid: 'Привязка к сетке', rulers: 'Линейки', guides: 'Направляющие', layers: 'Слои экранов', visible: 'Видимый', locked: 'Заблокирован',
-    panHint: 'Средняя кнопка мыши или Alt+ЛКМ двигает холст. Колесо мыши зумит в курсор. Shift при перетаскивании экрана ограничивает движение по оси.', logout: 'Выйти', projectInfo: 'Информация проекта',
+    panHint: 'Alt+ЛКМ двигает холст. Колесо мыши зумит в курсор. Shift при перетаскивании ограничивает движение по оси.', logout: 'Выйти', projectInfo: 'Информация проекта',
     screenObject: 'Инженерный объект', receiverCard: 'RX-карта', processor: 'Процессор', dataPort: 'Data port', powerLine: 'Линия питания', configFile: 'Config file', serialNumber: 'Serial', routing: 'Маршрут',
   },
   en: {
-    tagline: 'Professional LED screen engineering platform', loginTitle: 'Sign in to SHANTARAM Studio', loginSubtitle: 'Current mode: admin without password. We will replace it with real auth later.', enterAsAdmin: 'Enter as admin', admin: 'admin',
-    saved: 'Saved', saving: 'Saving...', local: 'Saved locally', error: 'Save error', localMode: 'local mode',
-    dashboard: 'Projects', recentProjects: 'Saved projects', emptyProjects: 'No projects yet. Create the first one and this shelf will start glowing.', newProject: 'New Project', backToProjects: 'All Projects', saveProject: 'Save Project',
+    tagline: 'Professional LED screen engineering platform', loginTitle: 'Sign in to SHANTARAM Studio', loginSubtitle: 'Current mode: admin without password. Projects are saved to cloud.', enterAsAdmin: 'Enter as admin', admin: 'admin',
+    saved: 'Saved to cloud', saving: 'Saving...', local: 'Local copy / sync pending', error: 'Save error', localMode: 'Supabase is not configured',
+    dashboard: 'Projects', recentProjects: 'Saved projects', emptyProjects: 'No projects yet. Create the first one.', newProject: 'New Project', backToProjects: 'All Projects', saveProject: 'Save Project',
     open: 'Open', duplicate: 'Duplicate', delete: 'Delete', updated: 'Updated', created: 'Created', author: 'Author', version: 'Version', description: 'Description',
     newScreen: '+ New Screen', numbering: 'Numbering', map: 'Map', library: 'Library', settings: 'Settings', fit: 'Fit', project: 'Project', screens: 'Screens', screen: 'Screen', cabinet: 'Cabinet', engineering: 'Eng.', calc: 'Calc', canvas: 'Canvas', addScreen: '+ Add screen',
-    workspace: 'CAD canvas / Multi-screen project', cabinets: 'Cabinets', resolution: 'Resolution', size: 'Size', selectedCabinet: 'Selected cabinet', row: 'row', column: 'column', activeScreenNote: 'Active project screen. Changes are applied and saved automatically.',
+    workspace: 'CAD canvas / Multi-screen project', cabinets: 'Cabinets', resolution: 'Resolution', size: 'Size', selectedCabinet: 'Selected cabinet', row: 'row', column: 'column', activeScreenNote: 'Active project screen. Changes are saved to cloud.',
     screenName: 'Screen name', cabinetType: 'Cabinet type', cabinetGrid: 'Cabinet grid', width: 'Width', height: 'Height', rows: 'Rows', snake: 'Snake', deleteScreen: 'Delete screen', duplicateScreen: 'Duplicate screen', selectedCabinetTitle: 'Selected cabinet',
     position: 'Position', model: 'Model', name: 'Name', manufacturer: 'Manufacturer', weight: 'Weight', averagePower: 'Average power', maxPower: 'Max power', config: 'Config', activeScreen: 'Active screen', physicalSize: 'Physical size', area: 'Area', wholeProject: 'Whole project', power: 'Power',
     fitView: 'Fit view', contextAddScreen: 'Add screen here', snapToGrid: 'Snap to grid', rulers: 'Rulers', guides: 'Guides', layers: 'Screen layers', visible: 'Visible', locked: 'Locked',
-    panHint: 'Middle mouse or Alt+Left Mouse pans the canvas. Mouse wheel zooms into cursor. Shift while dragging locks movement to an axis.', logout: 'Logout', projectInfo: 'Project info',
+    panHint: 'Alt+Left Mouse pans the canvas. Mouse wheel zooms into cursor. Shift while dragging locks movement to an axis.', logout: 'Logout', projectInfo: 'Project info',
     screenObject: 'Engineering object', receiverCard: 'RX card', processor: 'Processor', dataPort: 'Data port', powerLine: 'Power line', configFile: 'Config file', serialNumber: 'Serial', routing: 'Routing',
   },
 };
@@ -172,7 +173,7 @@ export default function Home() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [projects, setProjects] = useState<ProjectCard[]>([]);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
-  const [projectName, setProjectName] = useState('Summer Fest 2026');
+  const [projectName, setProjectName] = useState('');
   const [description, setDescription] = useState('');
   const [author, setAuthor] = useState('admin');
   const [version, setVersion] = useState(1);
@@ -238,58 +239,73 @@ export default function Home() {
     projectName, description, author, version, screens, activeScreenId, numberingMode, language, createdAt, updatedAt: new Date().toISOString(),
   }, language), [currentProjectId, projectName, description, author, version, screens, activeScreenId, numberingMode, language, createdAt]);
 
-  const loadLocalProject = (id: string): ProjectState | null => {
-    const raw = window.localStorage.getItem(`${PROJECT_KEY_PREFIX}${id}`) ?? window.localStorage.getItem(`${LEGACY_KEY_PREFIX}${id}`);
-    return raw ? normalizeProject(JSON.parse(raw) as ProjectState, language) : null;
-  };
-
-  const writeLocalProject = (payload: ProjectState) => {
-    window.localStorage.setItem(`${PROJECT_KEY_PREFIX}${payload.id}`, JSON.stringify(payload));
-    const currentIndex = JSON.parse(window.localStorage.getItem(PROJECT_INDEX_KEY) ?? window.localStorage.getItem(LEGACY_INDEX_KEY) ?? '[]') as string[];
-    const nextIndex = [payload.id, ...currentIndex.filter((id) => id !== payload.id)];
-    window.localStorage.setItem(PROJECT_INDEX_KEY, JSON.stringify(nextIndex));
+  const applyProject = (project: ProjectState, status: SaveStatus = 'saved') => {
+    const normalized = normalizeProject(project, project.language ?? language);
+    setCurrentProjectId(normalized.id);
+    setProjectName(normalized.projectName);
+    setDescription(normalized.description);
+    setAuthor(normalized.author);
+    setVersion(normalized.version);
+    setCreatedAt(normalized.createdAt);
+    setScreens(normalized.screens);
+    setActiveScreenId(normalized.activeScreenId);
+    setNumberingMode(normalized.numberingMode);
+    setLanguage(normalized.language ?? language);
+    setSelectedCabinet(1);
+    setPan({ x: 0, y: 0 });
+    setZoom(90);
+    setSaveStatus(status);
+    didLoadRef.current = true;
   };
 
   const refreshProjects = async () => {
-    const localIds = JSON.parse(window.localStorage.getItem(PROJECT_INDEX_KEY) ?? window.localStorage.getItem(LEGACY_INDEX_KEY) ?? '[]') as string[];
-    const localProjects = localIds.map(loadLocalProject).filter(Boolean).map((project) => summarizeProject(project as ProjectState));
-    let cloudProjects: ProjectCard[] = [];
-    if (supabase) {
-      const { data } = await supabase.from('projects').select('id,name,data,updated_at').order('updated_at', { ascending: false });
-      cloudProjects = (data ?? []).map((row) => summarizeProject(normalizeProject({ ...(row.data as ProjectState), id: row.id, updatedAt: row.updated_at }, language)));
-    }
-    setProjects([...cloudProjects, ...localProjects].reduce<ProjectCard[]>((acc, item) => acc.some((existing) => existing.id === item.id) ? acc : [...acc, item], []));
+    const result = await loadProjectsCloudFirst<ProjectState>();
+    setProjects(result.projects.map((project) => summarizeProject(normalizeProject(project, language))));
+    setSaveStatus(result.status === 'cloud' ? 'saved' : 'local');
   };
 
   const saveProjectNow = async (payload = projectPayload, bumpVersion = false) => {
     if (!currentProjectId) return;
-    const finalPayload = bumpVersion ? { ...payload, version: payload.version + 1, updatedAt: new Date().toISOString() } : payload;
+    const finalPayload = bumpVersion ? { ...payload, version: payload.version + 1, updatedAt: new Date().toISOString() } : { ...payload, updatedAt: new Date().toISOString() };
     setSaveStatus('saving');
-    writeLocalProject(finalPayload);
+    writeLocalProjectCopy(finalPayload);
     if (bumpVersion) setVersion(finalPayload.version);
-    if (!supabase) { setSaveStatus('local'); refreshProjects(); return; }
-    const { error } = await supabase.from('projects').upsert({ id: finalPayload.id, name: finalPayload.projectName, data: finalPayload, updated_at: finalPayload.updatedAt });
-    setSaveStatus(error ? 'local' : 'saved');
+    const status = await writeProjectToCloud(finalPayload);
+    setSaveStatus(status === 'cloud' ? 'saved' : status === 'sync-pending' ? 'local' : 'error');
     refreshProjects();
   };
 
   const openProject = async (id: string) => {
-    let project = loadLocalProject(id);
-    if (supabase) {
-      const { data, error } = await supabase.from('projects').select('data,updated_at').eq('id', id).maybeSingle();
-      if (!error && data?.data) project = normalizeProject({ ...(data.data as ProjectState), updatedAt: data.updated_at }, language);
-    }
-    if (!project) return;
-    setCurrentProjectId(project.id); setProjectName(project.projectName); setDescription(project.description); setAuthor(project.author); setVersion(project.version); setCreatedAt(project.createdAt);
-    setScreens(project.screens); setActiveScreenId(project.activeScreenId); setNumberingMode(project.numberingMode); setLanguage(project.language ?? language); setSelectedCabinet(1); setPan({ x: 0, y: 0 }); setZoom(90); setSaveStatus('saved'); didLoadRef.current = true;
+    const result = await loadProjectCloudFirst<ProjectState>(id);
+    if (!result.project) return;
+    applyProject(result.project, result.status === 'cloud' ? 'saved' : 'local');
   };
 
-  const makeNewProject = async () => { const project = createProject(language); writeLocalProject(project); setProjects((items) => [summarizeProject(project), ...items.filter((item) => item.id !== project.id)]); await openProject(project.id); };
-  const duplicateProject = (id: string) => { const source = loadLocalProject(id); if (!source) return; const copy = normalizeProject({ ...source, id: `project-${Date.now()}`, projectName: `${source.projectName} copy`, version: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, language); writeLocalProject(copy); refreshProjects(); };
-  const deleteProject = (id: string) => { window.localStorage.removeItem(`${PROJECT_KEY_PREFIX}${id}`); const index = JSON.parse(window.localStorage.getItem(PROJECT_INDEX_KEY) ?? '[]') as string[]; window.localStorage.setItem(PROJECT_INDEX_KEY, JSON.stringify(index.filter((item) => item !== id))); setProjects((items) => items.filter((item) => item.id !== id)); };
+  const makeNewProject = async () => {
+    const project = createProject(language);
+    applyProject(project, 'saving');
+    const status = await writeProjectToCloud(project);
+    setSaveStatus(status === 'cloud' ? 'saved' : 'local');
+    refreshProjects();
+  };
+
+  const duplicateProject = async (id: string) => {
+    const result = await loadProjectCloudFirst<ProjectState>(id);
+    if (!result.project) return;
+    const now = new Date().toISOString();
+    const copy = normalizeProject({ ...result.project, id: `project-${Date.now()}`, projectName: `${result.project.projectName} copy`, version: 1, createdAt: now, updatedAt: now }, language);
+    await writeProjectToCloud(copy);
+    refreshProjects();
+  };
+
+  const deleteProject = async (id: string) => {
+    const status = await removeProjectFromCloud(id);
+    setSaveStatus(status === 'cloud' ? 'saved' : 'local');
+    setProjects((items) => items.filter((item) => item.id !== id));
+  };
 
   useEffect(() => { setIsLoggedIn(window.localStorage.getItem(SESSION_KEY) === 'admin'); refreshProjects(); }, []);
-  useEffect(() => { if (!currentProjectId || !didLoadRef.current) return; setSaveStatus('saving'); window.localStorage.setItem(`${PROJECT_KEY_PREFIX}${currentProjectId}`, JSON.stringify(projectPayload)); const timeout = window.setTimeout(() => saveProjectNow(projectPayload), 700); return () => window.clearTimeout(timeout); }, [projectPayload, currentProjectId]);
+  useEffect(() => { if (!currentProjectId || !didLoadRef.current) return; setSaveStatus('saving'); const timeout = window.setTimeout(() => saveProjectNow(projectPayload), 700); return () => window.clearTimeout(timeout); }, [projectPayload, currentProjectId]);
 
   const login = () => { window.localStorage.setItem(SESSION_KEY, 'admin'); setIsLoggedIn(true); refreshProjects(); };
   const logout = () => { window.localStorage.removeItem(SESSION_KEY); setIsLoggedIn(false); setCurrentProjectId(null); };
@@ -316,7 +332,7 @@ export default function Home() {
 
   if (!currentProjectId) return (
     <main className="dashboard-shell">
-      <header className="topbar dashboard-topbar"><div className="brand"><strong>SHANTARAM Studio</strong><span>{t.tagline}</span></div><div className="top-actions"><span>{t.admin}</span><button className="tool-button ghost" onClick={logout}>{t.logout}</button><div className="lang"><button className={language === 'ru' ? 'active' : ''} onClick={() => setLanguage('ru')}>RU</button><button className={language === 'en' ? 'active' : ''} onClick={() => setLanguage('en')}>EN</button></div></div></header>
+      <header className="topbar dashboard-topbar"><div className="brand"><strong>SHANTARAM Studio</strong><span>{t.tagline}</span></div><div className="top-actions"><span className={`saved-dot ${saveStatus}`} /><span>{isSupabaseConfigured ? t[saveStatus] : t.localMode}</span><a className="tool-button ghost" href="/library">{t.library}</a><span>{t.admin}</span><button className="tool-button ghost" onClick={logout}>{t.logout}</button><div className="lang"><button className={language === 'ru' ? 'active' : ''} onClick={() => setLanguage('ru')}>RU</button><button className={language === 'en' ? 'active' : ''} onClick={() => setLanguage('en')}>EN</button></div></div></header>
       <section className="dashboard-content"><div className="dashboard-hero"><div><span>{t.dashboard}</span><h1>SHANTARAM Studio</h1><p>{t.recentProjects}</p></div><button className="tool-button primary" onClick={makeNewProject}>{t.newProject}</button></div>
         {projects.length === 0 ? <div className="empty-projects">{t.emptyProjects}</div> : <div className="project-cards">{projects.map((project) => <article className="project-card" key={project.id}><button className="project-card-main" onClick={() => openProject(project.id)}><strong>{project.name}</strong><span>{project.description || 'LED project'}</span><small>v{project.version} · {project.screens} {t.screens} · {project.cabinets} {t.cabinets} · {project.areaM2.toFixed(2)} m²</small><small>{t.updated}: {new Date(project.updatedAt).toLocaleString(language === 'ru' ? 'ru-RU' : 'en-US')}</small></button><div className="project-card-actions"><button onClick={() => openProject(project.id)}>{t.open}</button><button onClick={() => duplicateProject(project.id)}>{t.duplicate}</button><button onClick={() => deleteProject(project.id)}>{t.delete}</button></div></article>)}</div>}
       </section>
@@ -325,8 +341,8 @@ export default function Home() {
 
   return (
     <main className="app-shell" onClick={() => setContextMenu(null)}>
-      <header className="topbar"><div className="brand"><strong>SHANTARAM Studio</strong><span>{t.tagline}</span></div><div className="top-actions"><span className={`saved-dot ${saveStatus}`} /><span>{t[saveStatus]}{isSupabaseConfigured ? '' : ` · ${t.localMode}`}</span><span>{t.admin}</span><div className="lang"><button className={language === 'ru' ? 'active' : ''} onClick={() => setLanguage('ru')}>RU</button><button className={language === 'en' ? 'active' : ''} onClick={() => setLanguage('en')}>EN</button></div></div></header>
-      <nav className="toolbar"><button className="tool-button" onClick={() => setCurrentProjectId(null)}>{t.backToProjects}</button><button className="tool-button primary" onClick={() => addScreen()}>{t.newScreen}</button><button className="tool-button" onClick={() => saveProjectNow(projectPayload, true)}>{t.saveProject}</button><button className="tool-button ghost">{t.numbering}</button><button className="tool-button ghost">{t.map}</button><button className="tool-button ghost">{t.library}</button><button className="tool-button ghost">{t.settings}</button><div className="toolbar-spacer" /><button className={`tool-button ${snapToGrid ? '' : 'ghost'}`} onClick={() => setSnapToGrid((value) => !value)}>{t.snapToGrid}</button><button className="tool-button ghost" onClick={fitWorkspace}>{t.fit}</button><div className="zoom-controls"><button onClick={() => setZoom((value) => Math.max(35, value - 10))}>−</button><span>{zoom}%</span><button onClick={() => setZoom((value) => Math.min(180, value + 10))}>+</button></div></nav>
+      <header className="topbar"><div className="brand"><strong>SHANTARAM Studio</strong><span>{t.tagline}</span></div><div className="top-actions"><span className={`saved-dot ${saveStatus}`} /><span>{isSupabaseConfigured ? t[saveStatus] : t.localMode}</span><span>{t.admin}</span><div className="lang"><button className={language === 'ru' ? 'active' : ''} onClick={() => setLanguage('ru')}>RU</button><button className={language === 'en' ? 'active' : ''} onClick={() => setLanguage('en')}>EN</button></div></div></header>
+      <nav className="toolbar"><button className="tool-button" onClick={() => { setCurrentProjectId(null); refreshProjects(); }}>{t.backToProjects}</button><button className="tool-button primary" onClick={() => addScreen()}>{t.newScreen}</button><button className="tool-button" onClick={() => saveProjectNow(projectPayload, true)}>{t.saveProject}</button><button className="tool-button ghost">{t.numbering}</button><button className="tool-button ghost">{t.map}</button><a className="tool-button ghost" href="/library">{t.library}</a><button className="tool-button ghost">{t.settings}</button><div className="toolbar-spacer" /><button className={`tool-button ${snapToGrid ? '' : 'ghost'}`} onClick={() => setSnapToGrid((value) => !value)}>{t.snapToGrid}</button><button className="tool-button ghost" onClick={fitWorkspace}>{t.fit}</button><div className="zoom-controls"><button onClick={() => setZoom((value) => Math.max(35, value - 10))}>−</button><span>{zoom}%</span><button onClick={() => setZoom((value) => Math.min(180, value + 10))}>+</button></div></nav>
       <section className="workspace">
         <aside className="project-tree"><label className="project-title-field"><span>{t.project}</span><input value={projectName} onChange={(event) => setProjectName(event.target.value)} /></label><div className="project-meta-mini"><span>v{version}</span><span>{screens.length} {t.screens}</span><span>{projectTotals.areaM2.toFixed(2)} m²</span></div><div className="tree-section-title">{t.screens}</div><div className="screen-list">{screens.map((draft) => { const model = calculateScreen({ name: draft.name, cabinet: getCabinet(draft.cabinetId), columns: toNumber(draft.columns, 1), rows: toNumber(draft.rows, 1) }); return <button key={draft.id} className={`screen-list-item ${draft.id === activeScreenId ? 'active' : ''} ${draft.visible === false ? 'muted-item' : ''}`} onClick={() => { setActiveScreenId(draft.id); setSelectedCabinet(1); }}><strong>{draft.locked ? '🔒 ' : ''}{draft.visible === false ? '🙈 ' : ''}{draft.name}</strong><span>{model.columns}×{model.rows} · {model.calculated.widthM}×{model.calculated.heightM} m</span></button>; })}</div><button className="add-screen-small" onClick={() => addScreen()}>{t.addScreen}</button><div className="tree-section-title layer-title">{t.layers}</div><div className="layer-list">{screens.map((draft) => <div className="layer-row" key={`layer-${draft.id}`}><button onClick={() => updateScreen(draft.id, { visible: draft.visible === false })}>{draft.visible === false ? '🙈' : '👁'}</button><button onClick={() => updateScreen(draft.id, { locked: !draft.locked })}>{draft.locked ? '🔒' : '🔓'}</button><span>{draft.name}</span></div>)}</div></aside>
         <div className="stage cad-stage" onWheel={handleWheel} onContextMenu={showStageContext} onPointerDown={startPan} onPointerMove={movePan} onPointerUp={endPan} onPointerCancel={endPan}>{showRulers && <><div className="ruler ruler-top" /><div className="ruler ruler-left" /></>}<div className="screen-create-panel"><div className="panel-heading"><span>{projectName}</span><strong>{screen.name}</strong></div><div className="quick-grid"><div><span>{t.screens}</span><strong>{screens.length}</strong></div><div><span>{t.cabinets}</span><strong>{screen.columns} × {screen.rows}</strong></div><div><span>{t.resolution}</span><strong>{screen.calculated.resolutionX} × {screen.calculated.resolutionY} px</strong></div><div><span>{t.size}</span><strong>{screen.calculated.widthM} × {screen.calculated.heightM} m</strong></div></div></div><div className="stage-label">{t.workspace}</div><div className="floating-card"><span>{t.selectedCabinet}</span><strong>#{selected?.label ?? 1}</strong><small>{screen.name} · {t.row} {selected?.row ?? 1}, {t.column} {selected?.col ?? 1}</small></div><div className="stage-inner project-canvas" ref={canvasRef}><div className="canvas-plane cad-plane" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom / 100})` }}>{showGuides && <><div className="guide-line guide-x" style={{ top: activeDraft.y }} /><div className="guide-line guide-y" style={{ left: activeDraft.x }} /></>}{screens.filter((draft) => draft.visible !== false).map((draft) => { const itemCabinet = getCabinet(draft.cabinetId); const itemScreen = calculateScreen({ name: draft.name, cabinet: itemCabinet, columns: toNumber(draft.columns, 1), rows: toNumber(draft.rows, 1) }); const itemCabinets = Array.from({ length: itemScreen.calculated.cabinets }, (_, index) => index + 1); const isActive = draft.id === activeScreenId; return <div className={`screen-object ${isActive ? 'active' : ''} ${draggingScreenId === draft.id ? 'dragging' : ''} ${draft.locked ? 'locked' : ''}`} key={draft.id} style={{ left: draft.x, top: draft.y, aspectRatio: `${itemScreen.calculated.widthMm} / ${itemScreen.calculated.heightMm}` }} onPointerDown={(event) => startScreenDrag(event, draft)} onPointerMove={moveScreenDrag} onPointerUp={endScreenDrag} onPointerCancel={endScreenDrag} onContextMenu={(event) => showScreenContext(event, draft.id)}><div className="screen-object-title">{draft.locked ? '🔒 ' : ''}{draft.name}</div><div className="cabinet-grid" style={{ gridTemplateColumns: `repeat(${itemScreen.columns}, 1fr)`, gridTemplateRows: `repeat(${itemScreen.rows}, 1fr)` }}>{itemCabinets.map((number) => { const row = Math.floor((number - 1) / itemScreen.columns); const col = (number - 1) % itemScreen.columns; const snakeNumber = row % 2 === 0 ? row * itemScreen.columns + col + 1 : row * itemScreen.columns + (itemScreen.columns - col); const label = numberingMode === 'snake' ? snakeNumber : number; const isSelected = isActive && number === selectedCabinet; return <button className={`cabinet ${isSelected ? 'selected' : ''}`} key={number} onClick={(event) => { event.stopPropagation(); setActiveScreenId(draft.id); setSelectedCabinet(number); }} title={`${draft.name}. ${t.cabinet} #${label}`}>{label}</button>; })}</div></div>; })}</div></div>{contextMenu && <div className="context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={(event) => event.stopPropagation()}>{contextMenu.target === 'screen' && <><button onClick={() => duplicateScreen(contextMenu.screenId)}>{t.duplicateScreen}</button><button onClick={() => deleteScreen(contextMenu.screenId)} disabled={screens.length <= 1}>{t.deleteScreen}</button></>}<button onClick={() => addScreen(contextMenu.canvasX, contextMenu.canvasY)}>{t.contextAddScreen}</button><button onClick={fitWorkspace}>{t.fitView}</button><button onClick={() => saveProjectNow(projectPayload, true)}>{t.saveProject}</button></div>}</div>
